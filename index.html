@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<!--
+################################################################################
+Name: index.html
+Description: The Ironing Calibration Converter page.
+Author: benbashclub
+Date: November 18, 2026
+
+Loads:
+  - style.css              how the page looks
+  - zip_util.js            reads and writes the zip inside a 3MF
+  - ironing_converter.js   reads the pads and writes the new 3MF
+  - ironing_page.js        runs the page: drop box, pad preview, save button
+################################################################################
+-->
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Ironing Calibration Converter</title>
+    <meta name="description" content="Sets every pad's ironing flow and speed in your Customizable Ironing Calibration 3MF. Runs in your browser.">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+    <!-- Title and what the page is for -->
+    <header>
+        <h1>Ironing Calibration Converter</h1>
+        <p>For the Customizable Ironing Calibration on MakerWorld. Drop in your 3MF and get it back with
+            every pad's ironing flow and speed already set.</p>
+    </header>
+
+    <!-- Step 1: drop or choose the file -->
+    <section class="card">
+        <h2>1. Drop your 3MF</h2>
+        <label class="drop" id="drop_zone" tabindex="0">
+            <input type="file" id="file_input" accept=".3mf,.stl" hidden>
+            <strong>Drop the 3MF here</strong>
+            <span>or click to choose it</span>
+        </label>
+        <p class="note">Your file stays on your computer. Nothing is uploaded.</p>
+        <p class="message" id="load_message" role="status"></p>
+    </section>
+
+    <!-- Step 2: the pads that were read (shown once a file is read) -->
+    <section class="card" id="pads_card" hidden>
+        <h2>2. Check your pads</h2>
+        <p id="pad_summary"></p>
+        <div class="grid" id="pad_grid"></div>
+        <p class="note">Seen from above, with the front of the plate at the bottom.</p>
+    </section>
+
+    <!-- Step 3: pick the slicer and save (shown once a file is read) -->
+    <section class="card" id="save_card" hidden>
+        <h2>3. Save the new 3MF</h2>
+        <label class="field">Slicer
+            <select id="slicer">
+                <option value="orca">OrcaSlicer</option>
+                <option value="bambu">Bambu Studio (beta)</option>
+            </select>
+        </label>
+
+        <!-- Advanced settings stay folded away: the defaults suit most printers -->
+        <details class="advanced" id="advanced">
+            <summary>Advanced settings</summary>
+            <div class="fields">
+                <label>Ironing line spacing (mm)
+                    <input id="spacing" type="number" inputmode="decimal" step="0.01" min="0.05" max="1" value="0.15">
+                </label>
+                <label>Ironing inset (mm)
+                    <input id="inset" type="number" inputmode="decimal" step="0.01" min="0" max="2" value="0.21">
+                </label>
+                <label id="angle_field">Ironing angle (degrees)
+                    <input id="angle" type="number" inputmode="decimal" step="1" min="-360" max="360" value="0">
+                </label>
+            </div>
+            <ul class="fixed">
+                <li>Ironing type: Topmost surface only, so the label strips aren't ironed.</li>
+                <li>Pattern: Rectilinear.</li>
+                <li id="angle_note">Fixed ironing angle: on, so every pad is ironed in the same direction.</li>
+            </ul>
+            <p class="note">These apply to every pad. Use the same values when you set up ironing with your result.</p>
+        </details>
+
+        <button class="primary" id="save_button" type="button" disabled>Save 3MF</button>
+        <p class="message" id="save_message" role="status"></p>
+    </section>
+
+    <!-- Step 4: what to do in the slicer -->
+    <section class="card">
+        <h2>4. Slice and print</h2>
+        <ol>
+            <li>Open the new 3MF and pick your printer, filament and process as usual.</li>
+            <li><strong>Turn off ironing overrides in your filament settings</strong> (Setting Overrides → Ironing).
+                If they're ticked, every pad irons the same.</li>
+            <li>Slice and print, then pick the smoothest pad. Its flow and speed are engraved on it.</li>
+        </ol>
+    </section>
+
+    <!-- How it works, and who made it -->
+    <footer>
+        <p><strong>How it works:</strong> each pad has a tiny code on its underside that holds its flow and
+            speed. It's only 0.02 mm deep, too thin to print, but this page can read it.</p>
+        <p>Made by <a href="https://makerworld.com/en/@BenBashClub">BenBashClub</a> ·
+            <a href="https://github.com/benbashclub/ironing-calibration">Code on GitHub</a></p>
+    </footer>
+</main>
+
+<!-- Scripts: the zip helper first, then the converter, then the page -->
+<script src="zip_util.js"></script>
+<script src="ironing_converter.js"></script>
+<script src="ironing_page.js"></script>
+</body>
+</html>

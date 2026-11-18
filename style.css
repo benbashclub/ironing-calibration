@@ -1,0 +1,286 @@
+/*
+################################################################################
+Name: style.css
+Description: How the Ironing Calibration Converter page looks, light and dark.
+Author: benbashclub
+Date: November 18, 2026
+################################################################################
+*/
+
+/* Colours for light mode */
+:root {
+    --bg: #f5f3ef;
+    --card: #ffffff;
+    --ink: #1d2124;
+    --muted: #5d656b;
+    --line: #ddd8cf;
+    --accent: #c2531f;
+    --accent-soft: #fbeee6;
+    --on-accent: #ffffff;
+    --ok: #2e7a4d;
+    --bad: #b42318;
+    --bad-soft: #fdecea;
+    --pad: #e4e8ea;
+    --pad-edge: #8e989e;
+}
+
+/* Colours for dark mode, used when the computer is set to dark */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #141618;
+        --card: #1d2023;
+        --ink: #e7e9ea;
+        --muted: #9aa2a7;
+        --line: #31363a;
+        --accent: #e27740;
+        --accent-soft: #3a2418;
+        --on-accent: #1a0f08;
+        --ok: #5cc28a;
+        --bad: #ff8a7a;
+        --bad-soft: #3b1f1c;
+        --pad: #2c3236;
+        --pad-edge: #5f696f;
+    }
+}
+
+/* Page basics */
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+main {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 40px 20px 72px;
+}
+
+a {
+    color: var(--accent);
+}
+
+/* Title */
+header h1 {
+    font-size: clamp(26px, 4vw, 34px);
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    margin: 0 0 8px;
+}
+
+header p {
+    color: var(--muted);
+    max-width: 64ch;
+    margin: 0 0 28px;
+}
+
+/* Each step sits on a card */
+.card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 22px;
+    margin: 0 0 18px;
+}
+
+.card h2 {
+    font-size: 18px;
+    margin: 0 0 12px;
+}
+
+/* Drop box */
+.drop {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 40px 16px;
+    border: 2px dashed var(--line);
+    border-radius: 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s, background-color 0.15s;
+}
+
+.drop:hover,
+.drop:focus-visible,
+.drop.over {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    outline: none;
+}
+
+.drop strong {
+    font-size: 18px;
+}
+
+.drop span {
+    color: var(--muted);
+}
+
+.drop.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Small grey notes */
+.note {
+    color: var(--muted);
+    font-size: 14px;
+    margin: 10px 0 0;
+}
+
+/* Status lines: green when it worked, red when it didn't */
+.message {
+    font-weight: 600;
+    margin: 12px 0 0;
+}
+
+.message:empty {
+    display: none;
+}
+
+.message.ok {
+    color: var(--ok);
+}
+
+.message.bad {
+    color: var(--bad);
+}
+
+/* Pad preview */
+#pad_summary {
+    margin: 0;
+}
+
+.grid {
+    margin-top: 14px;
+}
+
+.grid svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 72vh;
+}
+
+/* Slicer choice */
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-width: 260px;
+    font-size: 14px;
+    color: var(--muted);
+}
+
+/* Advanced settings, folded away until opened */
+.advanced {
+    margin: 16px 0 0;
+    padding: 10px 14px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+}
+
+.advanced summary {
+    color: var(--muted);
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.advanced[open] summary {
+    margin-bottom: 12px;
+}
+
+.fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+    margin: 0 0 14px;
+}
+
+.fields label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 14px;
+    color: var(--muted);
+}
+
+/* Text boxes and drop-down lists */
+input,
+select {
+    font: inherit;
+    color: var(--ink);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px 10px;
+}
+
+input:focus,
+select:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
+/* Settings that can't be changed */
+.fixed {
+    color: var(--muted);
+    font-size: 14px;
+    padding-left: 20px;
+    margin: 0 0 6px;
+}
+
+.fixed li + li {
+    margin-top: 2px;
+}
+
+/* Save button */
+button.primary {
+    font: inherit;
+    font-weight: 650;
+    color: var(--on-accent);
+    background: var(--accent);
+    border: 0;
+    border-radius: 10px;
+    padding: 12px 24px;
+    margin-top: 16px;
+    cursor: pointer;
+}
+
+button.primary:hover:not(:disabled) {
+    filter: brightness(1.06);
+}
+
+button.primary:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+/* Slicer steps */
+ol {
+    padding-left: 22px;
+    margin: 0;
+}
+
+ol li + li {
+    margin-top: 6px;
+}
+
+/* How it works, and who made it */
+footer {
+    color: var(--muted);
+    font-size: 14px;
+    margin-top: 28px;
+}
+
+footer p {
+    max-width: 72ch;
+    margin: 0 0 8px;
+}
