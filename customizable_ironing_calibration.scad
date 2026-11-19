@@ -16,8 +16,9 @@
 // Returns:
 //   A grid of pads. Each pad has its flow and speed engraved on a sunken
 //   strip, so it can still be read once it's off the plate. Each pad also
-//   has a small code cut 0.02 mm into its underside. That's far thinner than
-//   any first layer, so no slicer prints it.
+//   has a small code cut 0.02 mm into its underside, under the label strip.
+//   That's far thinner than any first layer, so no slicer prints it, and it
+//   stays clear of the ironed test area.
 //
 // Usage:
 //   Open the model in MakerWorld's Parametric Model Maker, pick a test,
@@ -117,17 +118,19 @@ PETG_MACRO = ["Bottom_left", 5, 10, 5, 5, 10, 5];
 // Underside code (read by the converter page)
 // ==================================================
 
-// Format version of the code
-CODE_VERSION = 1;
+// Format version of the code. Version 2 sits under the label strip.
+CODE_VERSION = 2;
 
 // Depth of the code squares: keep far below half of any first layer height
 CODE_DEPTH = 0.02;
 
-// Size of one code square, in mm
-CODE_CELL = 1.2;
+// Size of one code square, in mm. Keep it 0.6 of the pitch: the converter
+// works out the pitch from the size of the whole grid.
+CODE_CELL = 0.6;
 
-// Distance from one code square's centre to the next, in mm
-CODE_PITCH = 2.0;
+// Distance from one code square's centre to the next, in mm. The whole grid
+// is 5.6 mm across, so it fits under the label strip on the smallest pads.
+CODE_PITCH = 1.0;
 
 // Middle of the grid. The customizer preview's bed is centred on the origin,
 // and MakerWorld centres the exported 3MF on the plate either way.
@@ -251,16 +254,18 @@ SPEED_SIZE = min(TEXT_CAP, TEXT_ROOM / widest_label(SPEEDS, SPEED_UNIT));
 // ==================================================
 // Underside code
 // ==================================================
-// A 6 x 6 grid of 1.2 mm squares on a 2 mm pitch, centred under the pad and
-// cut 0.02 mm into the bottom face. Cell [x, y] as seen from above:
+// A 6 x 6 grid of 0.6 mm squares on a 1 mm pitch, cut 0.02 mm into the
+// bottom face. It's centred under the label strip, so it stays clear of the
+// ironed test area. (Version 1 put a bigger grid under the middle of the
+// pad. The converter reads both.) Cell [x, y] as seen from above:
 // x = 0..5 left to right, y = 0..5 front to back.
 //
 // Corners [0,0], [5,0] and [0,5] are always cut and [5,5] never is, so the
-// converter can tell which way round the pad is.
+// converter can find the grid and tell which way round the pad is.
 //
 // The other 32 cells, row by row from the front and left to right in each
 // row, hold 32 bits (a cut square is a 1):
-//   bits  0-1   format version (1)
+//   bits  0-1   format version (2)
 //   bits  2-11  ironing flow  x 10   (0.1 % steps)
 //   bits 12-23  ironing speed x 10   (0.1 mm/s steps)
 //   bits 24-31  check = (31*version + 7*flow10 + 13*speed10 + 90) mod 251
@@ -283,7 +288,7 @@ CODE_MARKERS = [[0, 0], [5, 0], [0, 5]];
 CODE_CELLS   = [for (y = [0 : 5]) for (x = [0 : 5])
                    if (!((x == 0 || x == 5) && (y == 0 || y == 5))) [x, y]];
 
-// Cut the code squares into the bottom of a pad
+// Cut the code squares into the bottom of a pad, centred under the label strip
 module cut_code_squares(flow, speed) {
     b = make_code_bits(flow, speed);
 
@@ -291,8 +296,8 @@ module cut_code_squares(flow, speed) {
     cut = concat(CODE_MARKERS,
                  [for (k = [0 : len(CODE_CELLS) - 1]) if (b[k] == 1) CODE_CELLS[k]]);
     for (cell = cut)
-        translate([Pad_size / 2 + (cell[0] - 2.5) * CODE_PITCH - CODE_CELL / 2,
-                   Pad_size / 2 + (cell[1] - 2.5) * CODE_PITCH - CODE_CELL / 2,
+        translate([Pad_size / 2    + (cell[0] - 2.5) * CODE_PITCH - CODE_CELL / 2,
+                   STRIP_DEPTH / 2 + (cell[1] - 2.5) * CODE_PITCH - CODE_CELL / 2,
                    -EPS])
             cube([CODE_CELL, CODE_CELL, CODE_DEPTH + EPS]);
 }

@@ -5,10 +5,11 @@
 // Author: benbashclub
 // Date: November 18, 2026
 //
-// The MakerWorld customizer cuts a tiny code into the underside of every pad.
-// The code holds that pad's ironing flow and speed. This script finds each
-// pad, reads its code, and writes a new 3MF where the grid is one object and
-// each pad is a part with its own ironing flow and speed.
+// The MakerWorld customizer cuts a tiny code into the underside of every pad,
+// under its label strip. The code holds that pad's ironing flow and speed.
+// This script finds each pad, reads its code, and writes a new 3MF where the
+// grid is one object and each pad is a part with its own ironing flow and
+// speed.
 //
 // Supported input files:
 //   - 3MF downloaded from the customizer on MakerWorld
@@ -37,11 +38,17 @@
 
 'use strict';
 
-// Underside code, as cut by customizable_ironing_calibration.scad:
-// a 6 x 6 grid of squares on a 2 mm pitch, 0.02 mm deep
-const CODE_PITCH = 2.0;
+// Underside code, as cut by customizable_ironing_calibration.scad: a 6 x 6
+// grid of squares cut 0.02 mm into the bottom of the pad.
+//   - Version 1 (the first downloads): under the middle of the pad, 2 mm pitch
+//   - Version 2: under the label strip, 1 mm pitch
+// The code is found from its corner markers, so both versions read the same way.
 const CODE_DEPTH = 0.02;
-const CODE_VERSION = 1;
+const CODE_VERSIONS = [1, 2];
+
+// Each square is 0.6 of the pitch wide, so the whole grid is 5.6 pitches across
+const CODE_SQUARE = 0.6;
+const CODE_GRID_WIDTH = 5 + CODE_SQUARE;
 
 // Corner squares that are always cut, so the reader can tell which way round
 // the pad is. The fourth corner, [5, 5], is never cut.
@@ -507,7 +514,7 @@ function decode_cells(cells) {
     const check = read_bits(bits, 24, 32);
 
     // Refuse codes this page doesn't know, and codes that fail their check
-    if (version !== CODE_VERSION) return { error: 'code from a newer version of the customizer' };
+    if (!CODE_VERSIONS.includes(version)) return { error: 'code from a newer version of the customizer' };
     if (check !== (31 * version + 7 * flow10 + 13 * speed10 + 90) % 251) return { error: 'code check failed' };
     return { flow: flow10 / 10, speed: speed10 / 10 };
 }
@@ -532,9 +539,11 @@ function read_pad(vertices, triangles, triangle_ids) {
     const centre_x = (x0 + x1) / 2;
     const centre_y = (y0 + y1) / 2;
 
-    // The ceiling of each code square sits CODE_DEPTH above the bottom of the pad
+    // Find the code: the ceilings of its squares are flat faces pointing down,
+    // CODE_DEPTH above the bottom of the pad
     const code_z = z0 + CODE_DEPTH;
-    const cells = new Map();
+    const code_triangles = [];
+    let code_x0 = Infinity, code_y0 = Infinity, code_x1 = -Infinity, code_y1 = -Infinity;
     for (const t of triangle_ids) {
         const a = triangles[3 * t], b = triangles[3 * t + 1], c = triangles[3 * t + 2];
 
@@ -547,16 +556,37 @@ function read_pad(vertices, triangles, triangle_ids) {
         const vx = vertices[3 * c] - vertices[3 * a], vy = vertices[3 * c + 1] - vertices[3 * a + 1];
         if (ux * vy - uy * vx >= 0) continue;
 
-        // Work out which square of the 6 x 6 grid the triangle is in
-        const grid_x = ((vertices[3 * a] + vertices[3 * b] + vertices[3 * c]) / 3 - centre_x) / CODE_PITCH + 2.5;
-        const grid_y = ((vertices[3 * a + 1] + vertices[3 * b + 1] + vertices[3 * c + 1]) / 3 - centre_y) / CODE_PITCH + 2.5;
-        const cell_x = Math.round(grid_x);
-        const cell_y = Math.round(grid_y);
+        // Keep the triangle, and stretch the code's outline to take it in
+        code_triangles.push(t);
+        for (const v of [a, b, c]) {
+            code_x0 = Math.min(code_x0, vertices[3 * v]);
+            code_x1 = Math.max(code_x1, vertices[3 * v]);
+            code_y0 = Math.min(code_y0, vertices[3 * v + 1]);
+            code_y1 = Math.max(code_y1, vertices[3 * v + 1]);
+        }
+    }
 
-        // Keep it only when it sits near the middle of a square inside the grid
-        if (Math.abs(grid_x - cell_x) < 0.35 && Math.abs(grid_y - cell_y) < 0.35 &&
-            cell_x >= 0 && cell_x <= 5 && cell_y >= 0 && cell_y <= 5) {
-            cells.set(cell_x * 6 + cell_y, [cell_x, cell_y]);
+    // Three corner markers are always cut, so the outline covers the whole grid
+    // and its width gives the pitch. An outline that isn't square isn't a code.
+    const grid_size = code_x1 - code_x0;
+    const pitch = grid_size / CODE_GRID_WIDTH;
+    const cells = new Map();
+    if (code_triangles.length && Math.abs(code_y1 - code_y0 - grid_size) < 0.05 * grid_size) {
+        for (const t of code_triangles) {
+            const a = triangles[3 * t], b = triangles[3 * t + 1], c = triangles[3 * t + 2];
+
+            // Work out which square of the 6 x 6 grid the triangle is in
+            const grid_x = ((vertices[3 * a] + vertices[3 * b] + vertices[3 * c]) / 3 - code_x0) / pitch - CODE_SQUARE / 2;
+            const grid_y = ((vertices[3 * a + 1] + vertices[3 * b + 1] + vertices[3 * c + 1]) / 3 - code_y0) / pitch -
+                CODE_SQUARE / 2;
+            const cell_x = Math.round(grid_x);
+            const cell_y = Math.round(grid_y);
+
+            // Keep it only when it sits near the middle of a square inside the grid
+            if (Math.abs(grid_x - cell_x) < 0.35 && Math.abs(grid_y - cell_y) < 0.35 &&
+                cell_x >= 0 && cell_x <= 5 && cell_y >= 0 && cell_y <= 5) {
+                cells.set(cell_x * 6 + cell_y, [cell_x, cell_y]);
+            }
         }
     }
 

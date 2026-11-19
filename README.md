@@ -14,6 +14,8 @@ Before you slice, turn off **Ironing flow** and **Ironing speed** in your filame
 
 Your file stays on your computer. Nothing is uploaded.
 
+**How it works:** each pad has a tiny code under its label strip, cut only 0.02 mm into the bottom. It's too thin to print and stays clear of the ironed test area. The converter reads it from the file.
+
 ## What's in here
 
 | File | What it does |
