@@ -4,7 +4,7 @@
 Name: index.html
 Description: The Ironing Calibration Converter page.
 Author: benbashclub
-Date: November 18, 2026
+Date: November 19, 2026
 
 Loads:
   - style.css              how the page looks
@@ -64,15 +64,27 @@ Loads:
         <details class="advanced" id="advanced">
             <summary>Advanced settings</summary>
             <div class="fields">
-                <label>Ironing line spacing (mm)
+                <div class="setting">
+                    <div class="setting_name">
+                        <label for="spacing">Ironing line spacing (mm)</label>
+                        <button class="help" type="button" data-help="help_spacing" aria-label="Help: ironing line spacing">?</button>
+                    </div>
                     <input id="spacing" type="number" inputmode="decimal" step="0.01" min="0.05" max="1" value="0.15">
-                </label>
-                <label>Ironing inset (mm)
+                </div>
+                <div class="setting">
+                    <div class="setting_name">
+                        <label for="inset">Ironing inset (mm)</label>
+                        <button class="help" type="button" data-help="help_inset" aria-label="Help: ironing inset">?</button>
+                    </div>
                     <input id="inset" type="number" inputmode="decimal" step="0.01" min="0" max="2" value="0.21">
-                </label>
-                <label id="angle_field">Ironing angle (degrees)
+                </div>
+                <div class="setting" id="angle_field">
+                    <div class="setting_name">
+                        <label for="angle">Ironing angle (degrees)</label>
+                        <button class="help" type="button" data-help="help_angle" aria-label="Help: ironing angle">?</button>
+                    </div>
                     <input id="angle" type="number" inputmode="decimal" step="1" min="-360" max="360" value="0">
-                </label>
+                </div>
             </div>
             <ul class="fixed">
                 <li>Ironing type: Topmost surface only, so the label strips aren't ironed.</li>
@@ -96,6 +108,40 @@ Loads:
             <li>Slice and print, then pick the smoothest pad. Its flow and speed are engraved on it.</li>
         </ol>
     </section>
+
+    <!-- Help boxes for the advanced settings, opened by the ? buttons -->
+    <dialog class="help_box" id="help_spacing" aria-labelledby="help_spacing_title">
+        <button class="close" type="button" aria-label="Close">×</button>
+        <h3 id="help_spacing_title">Ironing line spacing</h3>
+        <p class="default">Default 0.15 mm (0.4 mm nozzle)</p>
+        <ul>
+            <li>The distance between ironing passes. Keep it at or below the nozzle diameter.</li>
+            <li>Tighter is smoother but slower: 0.10 makes ironing take about 1.5× as long as 0.15.</li>
+            <li>0.2 mm nozzle: start around 0.08.</li>
+        </ul>
+    </dialog>
+
+    <dialog class="help_box" id="help_inset" aria-labelledby="help_inset_title">
+        <button class="close" type="button" aria-label="Close">×</button>
+        <h3 id="help_inset_title">Ironing inset</h3>
+        <p class="default">Default 0.21 mm</p>
+        <ul>
+            <li>How far in from the edge of the top surface the ironing stops.</li>
+            <li>0.21 is half a 0.42 mm line, so ironing stops just inside the outer wall. At 0, OrcaSlicer uses half the nozzle diameter.</li>
+            <li>Raise it if ironed edges get a raised lip or blobs. Lower it if you see a rough un-ironed border.</li>
+        </ul>
+    </dialog>
+
+    <dialog class="help_box" id="help_angle" aria-labelledby="help_angle_title">
+        <button class="close" type="button" aria-label="Close">×</button>
+        <h3 id="help_angle_title">Ironing angle</h3>
+        <p class="default">Default 0°, fixed (OrcaSlicer only)</p>
+        <ul>
+            <li>The direction of the ironing lines. It's fixed, so every pad is ironed the same way.</li>
+            <li>With the usual 45° top surface lines, use 0° or 90° so ironing crosses them.</li>
+            <li>If your top surface lines run at another angle, pick one that crosses them.</li>
+        </ul>
+    </dialog>
 
     <!-- How it works, and who made it -->
     <footer>

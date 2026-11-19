@@ -2,7 +2,7 @@
 // Ironing Calibration Converter - Version 2
 //##############################################################################
 // AUTHOR: benbashclub
-// DATE: 11/18/2026
+// DATE: 11/19/2026
 //
 // DESCRIPTION:
 //   Runs the converter page. It takes the 3MF from the Customizable Ironing
@@ -28,6 +28,7 @@
 //   - Reads the code under each pad, so no values are typed in
 //   - Shows every pad with its flow and speed before saving
 //   - Refuses a file when any pad can't be read
+//   - A ? next to each advanced setting opens a short help box
 //
 // REQUIREMENTS:
 //   A current version of Chrome, Edge, Firefox or Safari (16.4 or newer).
@@ -221,6 +222,22 @@ async function build_and_save() {
     }
 }
 
+// Function to open the help box named by a ? button
+function open_help(button) {
+    get_element(button.dataset.help).showModal();
+}
+
+// Function to close a help box when the dark area around it is clicked
+function close_help_on_backdrop(event) {
+    const box = event.currentTarget;
+
+    // Clicks on the text or the x belong to the box's contents, not the backdrop
+    if (event.target !== box) return;
+    const r = box.getBoundingClientRect();
+    const inside = event.clientX >= r.left && event.clientX <= r.right && event.clientY >= r.top && event.clientY <= r.bottom;
+    if (!inside) box.close();
+}
+
 // Function to check that this browser can do everything the page needs
 function check_requirements() {
     const missing_features = [];
@@ -295,6 +312,15 @@ function main() {
     get_element('slicer').addEventListener('change', update_slicer_notes);
     get_element('save_button').addEventListener('click', build_and_save);
     update_slicer_notes();
+
+    // Each ? button opens its help box. The x, Esc, or a click outside closes it.
+    for (const button of document.querySelectorAll('button.help')) {
+        button.addEventListener('click', () => open_help(button));
+    }
+    for (const box of document.querySelectorAll('dialog.help_box')) {
+        box.querySelector('.close').addEventListener('click', () => box.close());
+        box.addEventListener('click', close_help_on_backdrop);
+    }
 }
 
 main();
