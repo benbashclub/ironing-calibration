@@ -2,16 +2,15 @@
 // Name: customizable_ironing_calibration.scad
 // Description: MakerWorld customizer that makes a grid of ironing test pads.
 // Author: benbashclub
-// Date: November 18, 2026
+// Date: November 19, 2026
 //
 // Makes separate test pads for dialing in ironing flow (%) and ironing speed
 // (mm/s). Each row of pads is one flow and each column is one speed. The
 // Start pad gets the start values, and values go up as you move away from it.
 //
-// Tests:
-//   - Custom: your own pads and values (they start as the PLA macro)
-//   - Recommended_PLA_macro: flow 10-30 %, speed 15-55 mm/s
-//   - Recommended_PETG_macro: flow 10-30 %, speed 10-30 mm/s
+// Suggested macro tests (also shown in the customizer, under Start pad):
+//   - PLA, the defaults: 5 x 5 pads, flow 10-30 %, speed 15-55 mm/s
+//   - PETG: the same, but speed 10-30 mm/s (Speed start 10, Speed step 5)
 //
 // Returns:
 //   A grid of pads. Each pad has its flow and speed engraved on a sunken
@@ -21,8 +20,8 @@
 //   stays clear of the ironed test area.
 //
 // Usage:
-//   Open the model in MakerWorld's Parametric Model Maker, pick a test,
-//   then download the 3MF.
+//   Open the model in MakerWorld's Parametric Model Maker, set the Ironing
+//   Settings (they start as the PLA macro), then download the 3MF.
 //
 // Integration with other scripts:
 //   Drop the downloaded 3MF on the converter page. It reads the code under
@@ -31,19 +30,13 @@
 //##############################################################################
 
 
-/* [Test] */
+/* [Ironing Settings] */
 
-// Custom uses the numbers below, which start as the recommended PLA macro. A recommended test replaces the numbers below while it is selected.
-Test = "Custom"; // [Custom, Recommended_PLA_macro, Recommended_PETG_macro]
-
-
-/* [Custom test] */
-
-// Used when Test is Custom. The pad that gets your start values. Values go up as you move away from it. Middle puts the start values in the centre pad.
+// Suggested macro tests. PLA, the defaults, is 5 Pad Rows and 5 Pad Columns, Flow start 10, Flow step 5, Speed start 15, Speed step 10. For PETG keep those but set Speed start 10 and Speed step 5. The Start pad gets your start values, and values go up as you move away from it. Middle puts the start values in the centre pad.
 Start_pad = "Bottom_left"; // [Bottom_left, Bottom_right, Top_left, Top_right, Middle]
 
-// Pads from bottom to top. Each row is one ironing flow.
-Pads_up = 5; // [1:1:10]
+// Rows of pads, bottom to top. Each row is one ironing flow.
+Pad_Rows = 5; // [1:1:10]
 
 // Ironing flow on the start pad, in %.
 Flow_start = 10; // [1:0.5:100]
@@ -51,8 +44,8 @@ Flow_start = 10; // [1:0.5:100]
 // How much the flow changes from one row to the next, in %.
 Flow_step = 5; // [0.5:0.5:20]
 
-// Pads from left to right. Each column is one ironing speed.
-Pads_across = 5; // [1:1:10]
+// Columns of pads, left to right. Each column is one ironing speed.
+Pad_Columns = 5; // [1:1:10]
 
 // Ironing speed on the start pad, in mm per second.
 Speed_start = 15; // [1:1:200]
@@ -102,19 +95,6 @@ FONT = "Liberation Sans:style=Bold";
 
 
 // ==================================================
-// Recommended macro tests
-// ==================================================
-// Each test is:
-//   [start pad, pads up, flow start, flow step, pads across, speed start, speed step]
-
-// PLA: flow 10-30 %, speed 15-55 mm/s
-PLA_MACRO = ["Bottom_left", 5, 10, 5, 5, 15, 10];
-
-// PETG: flow 10-30 %, speed 10-30 mm/s
-PETG_MACRO = ["Bottom_left", 5, 10, 5, 5, 10, 5];
-
-
-// ==================================================
 // Underside code (read by the converter page)
 // ==================================================
 
@@ -156,20 +136,14 @@ function format_value(v) = let (r = round_tenth(v)) (r == floor(r)) ? str(floor(
 // Check a drop-down value, written with an underscore or a space
 function is_choice(v, a, b) = v == a || v == b;
 
-// Pick the test to build. Custom, and anything unexpected, uses the numbers
-// in Custom test.
-TEST_VALUES = is_choice(Test, "Recommended_PETG_macro", "Recommended PETG macro") ? PETG_MACRO
-            : is_choice(Test, "Recommended_PLA_macro", "Recommended PLA macro")   ? PLA_MACRO
-            : [Start_pad, Pads_up, Flow_start, Flow_step,
-               Pads_across, Speed_start, Speed_step];
-
-START_PAD   = TEST_VALUES[0];
-PADS_UP     = TEST_VALUES[1];
-FLOW_START  = TEST_VALUES[2];
-FLOW_STEP   = TEST_VALUES[3];
-PADS_ACROSS = TEST_VALUES[4];
-SPEED_START = TEST_VALUES[5];
-SPEED_STEP  = TEST_VALUES[6];
+// The Ironing Settings, under the names the rest of the file uses
+START_PAD   = Start_pad;
+PAD_ROWS    = Pad_Rows;
+FLOW_START  = Flow_start;
+FLOW_STEP   = Flow_step;
+PAD_COLUMNS = Pad_Columns;
+SPEED_START = Speed_start;
+SPEED_STEP  = Speed_step;
 
 // Find where the start pad sits on each axis: "low", "high" or "mid"
 ACROSS_FROM =
@@ -193,12 +167,12 @@ function pad_value(i, n, start, step, from, extra_high) =
                      start + i * step;
 
 // Flow of each row, bottom to top
-FLOWS  = [for (r = [0 : PADS_UP - 1])
-             round_tenth(pad_value(r, PADS_UP, FLOW_START, FLOW_STEP, UP_FROM, false))];
+FLOWS  = [for (r = [0 : PAD_ROWS - 1])
+             round_tenth(pad_value(r, PAD_ROWS, FLOW_START, FLOW_STEP, UP_FROM, false))];
 
 // Speed of each column, left to right
-SPEEDS = [for (c = [0 : PADS_ACROSS - 1])
-             round_tenth(pad_value(c, PADS_ACROSS, SPEED_START, SPEED_STEP, ACROSS_FROM, true))];
+SPEEDS = [for (c = [0 : PAD_COLUMNS - 1])
+             round_tenth(pad_value(c, PAD_COLUMNS, SPEED_START, SPEED_STEP, ACROSS_FROM, true))];
 
 // Collect any settings that would give values the slicer can't use
 ERRORS = concat(
@@ -343,13 +317,13 @@ module make_pad(flow, speed) {
 
 // Distance from one pad to the next, and the size of the whole grid
 PAD_PITCH   = Pad_size + Pad_gap;
-GRID_WIDTH  = PADS_ACROSS * Pad_size + (PADS_ACROSS - 1) * Pad_gap;
-GRID_DEPTH  = PADS_UP     * Pad_size + (PADS_UP     - 1) * Pad_gap;
+GRID_WIDTH  = PAD_COLUMNS * Pad_size + (PAD_COLUMNS - 1) * Pad_gap;
+GRID_DEPTH  = PAD_ROWS    * Pad_size + (PAD_ROWS    - 1) * Pad_gap;
 
 // Lay out the pads, centred on the bed
 module make_grid() {
     translate([BED_CENTRE[0] - GRID_WIDTH / 2, BED_CENTRE[1] - GRID_DEPTH / 2, 0])
-        for (row = [0 : PADS_UP - 1], col = [0 : PADS_ACROSS - 1])
+        for (row = [0 : PAD_ROWS - 1], col = [0 : PAD_COLUMNS - 1])
             translate([col * PAD_PITCH, row * PAD_PITCH, 0])
                 make_pad(FLOWS[row], SPEEDS[col]);
 }
@@ -385,7 +359,7 @@ if (len(ERRORS) > 0) {
     echo(str("CHECK YOUR SETTINGS: ", ERRORS));
 } else {
     make_grid();
-    echo(str(PADS_ACROSS * PADS_UP, " pads, plate needed ",
+    echo(str(PAD_COLUMNS * PAD_ROWS, " pads, plate needed ",
              format_value(GRID_WIDTH), " x ", format_value(GRID_DEPTH), " mm"));
     echo(str("Flow ", format_value(min(FLOWS)), " to ", format_value(max(FLOWS)), " %,  ",
              "speed ", format_value(min(SPEEDS)), " to ", format_value(max(SPEEDS)), " mm/s"));
