@@ -15,10 +15,10 @@
 //
 // EXAMPLES:
 //   Drop ironing_test.3mf   ->  saves ironing_test-ironing.3mf
-//   Drop ironing_test.stl   ->  saves ironing_test-ironing.3mf
+//   Drop ironing_test.stl   ->  saves ironing_test-ironing.3mf (OrcaSlicer only)
 //
 // PAGE OPTIONS:
-//   Slicer                  OrcaSlicer, or Bambu Studio (beta)
+//   Slicer                  Bambu Studio (the default), or OrcaSlicer
 //   Ironing line spacing    0.05 to 1 mm (default 0.15)
 //   Ironing inset           0 to 2 mm (default 0.21)
 //   Ironing angle           fixed angle, OrcaSlicer only (default 0)
@@ -29,6 +29,7 @@
 //   - Shows every pad with its flow and speed before saving
 //   - Refuses a file when any pad can't be read
 //   - A ? next to each advanced setting opens a short help box
+//   - Bambu Studio files keep MakerWorld's project, so Bambu Studio keeps every pad's settings
 //
 // REQUIREMENTS:
 //   A current version of Chrome, Edge, Firefox or Safari (16.4 or newer).
@@ -54,8 +55,14 @@ const OPTION_ERRORS = {
     angle: '❌ Ironing angle must be between -360 and 360.',
 };
 
+// Messages for files that can't be saved for the chosen slicer
+const SAVE_ERRORS = {
+    'needs-bambu-project': "❌ For Bambu Studio, drop the 3MF straight from MakerWorld. This file doesn't " +
+        'have the Bambu Studio settings it needs. Pick OrcaSlicer to convert it as it is.',
+};
+
 // Slicer names as shown on the page
-const SLICER_NAMES = { orca: 'OrcaSlicer', bambu: 'Bambu Studio' };
+const SLICER_NAMES = { bambu: 'Bambu Studio', orca: 'OrcaSlicer' };
 
 // The file that was read last, and the link to the last file saved
 let CURRENT_FILE = null;
@@ -159,13 +166,22 @@ async function load_file(file) {
     }
 }
 
-// Function to show or hide the angle setting, which only OrcaSlicer has
+// Function to show the settings and steps for the chosen slicer: only
+// OrcaSlicer has the angle setting and the filament ironing overrides
 function update_slicer_notes() {
     const is_orca = get_element('slicer').value === 'orca';
     get_element('angle_field').hidden = !is_orca;
+    get_element('orca_step').hidden = !is_orca;
     get_element('angle_note').textContent = is_orca
         ? 'Fixed ironing angle: on, so every pad is ironed in the same direction.'
         : "Bambu Studio has no fixed ironing angle, so your profile's ironing direction is used for every pad.";
+}
+
+// Function to update the page when another slicer is picked
+function change_slicer() {
+    // A message about the last save no longer applies
+    show_status('save_message', '');
+    update_slicer_notes();
 }
 
 // Function to free the link to the last saved file
@@ -214,6 +230,8 @@ async function build_and_save() {
             // Open the advanced settings, so the value that needs fixing can be seen
             get_element('advanced').open = true;
             show_status('save_message', OPTION_ERRORS[error.detail], 'bad');
+        } else if (SAVE_ERRORS[error.code]) {
+            show_status('save_message', SAVE_ERRORS[error.code], 'bad');
         } else {
             show_status('save_message', `❌ Couldn't build the file: ${error.message}`, 'bad');
         }
@@ -309,7 +327,7 @@ function main() {
     window.addEventListener('drop', (event) => event.preventDefault());
 
     // Slicer choice and the save button
-    get_element('slicer').addEventListener('change', update_slicer_notes);
+    get_element('slicer').addEventListener('change', change_slicer);
     get_element('save_button').addEventListener('click', build_and_save);
     update_slicer_notes();
 

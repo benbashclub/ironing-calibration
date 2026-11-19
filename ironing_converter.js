@@ -3,7 +3,7 @@
 // Description: Reads the pads in a Customizable Ironing Calibration file and
 //              writes a 3MF with every pad's ironing flow and speed set.
 // Author: benbashclub
-// Date: November 18, 2026
+// Date: November 19, 2026
 //
 // The MakerWorld customizer cuts a tiny code into the underside of every pad,
 // under its label strip. The code holds that pad's ironing flow and speed.
@@ -13,7 +13,13 @@
 //
 // Supported input files:
 //   - 3MF downloaded from the customizer on MakerWorld
-//   - STL exported from the same model (binary or text)
+//   - STL exported from the same model (binary or text), OrcaSlicer only
+//
+// Bambu Studio throws away every setting in a 3MF that has no Bambu Studio
+// project in it (printer, filament and process), so the pads would all lose
+// their ironing. The MakerWorld 3MF carries that project, so the Bambu Studio
+// file is built on top of it. OrcaSlicer reads the settings either way, so
+// its file holds only the pads.
 //
 // Returns:
 //   read_ironing_file   the pads, each with its place, flow and speed
@@ -23,10 +29,10 @@
 // Usage:
 //   const analysis = await read_ironing_file(buffer, 'test.3mf');
 //   const bytes = await build_ironing_3mf(analysis,
-//       { slicer: 'orca', spacing: 0.15, inset: 0.21, angle: 0 });
+//       { slicer: 'bambu', spacing: 0.15, inset: 0.21, angle: 0 });
 //
 // OPTIONS:
-//   slicer    'orca' (the default) or 'bambu'
+//   slicer    'bambu' (the default) or 'orca'
 //   spacing   ironing line spacing, 0.05 to 1 mm
 //   inset     ironing inset, 0 to 2 mm
 //   angle     fixed ironing angle, -360 to 360 degrees (OrcaSlicer only)
@@ -63,12 +69,43 @@ const IDENTITY = [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0];
 // Where an STL's pads go: the middle of a 256 mm plate
 const STL_PLATE_CENTRE = [128, 128];
 
-// Program names written into the 3MF, so each slicer opens it as its own
+// Program name written into the OrcaSlicer 3MF, so OrcaSlicer opens it as its own
 const ORCA_APPLICATION = 'OrcaSlicer-2.2.0';
-const BAMBU_APPLICATION = 'BambuStudio-02.07.01.57';
 
 // Part transform in the slicer settings: no move
 const NO_MOVE_MATRIX = '1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1';
+
+// The Bambu Studio project inside a MakerWorld 3MF: printer, filament and process
+const BAMBU_PROJECT_SETTINGS = 'Metadata/project_settings.config';
+
+// Where Bambu Studio keeps the meshes of a multi-part object
+const BAMBU_OBJECT_FILE = '3D/Objects/object_1.model';
+
+// Files the Bambu Studio file keeps from the MakerWorld 3MF as they are: the
+// project, the file index and the small notes Bambu Studio adds. The plate
+// pictures (Metadata/*.png) are kept too.
+const BAMBU_KEPT_FILES = ['[Content_Types].xml', '_rels/.rels', BAMBU_PROJECT_SETTINGS,
+    'Metadata/filament_sequence.json', 'Metadata/cut_information.xml'];
+
+// Plate settings that name a picture of the plate
+const BAMBU_PLATE_PICTURES = ['thumbnail_file', 'thumbnail_no_light_file', 'top_file', 'pick_file'];
+
+// The ID endings Bambu Studio writes on objects, parts and the build
+const BAMBU_OBJECT_UUID_END = '-61cb-4c03-9d28-80fed5dfa1dc';
+const BAMBU_PART_UUID_END = '-81cb-4c03-9d28-80fed5dfa1dc';
+const BAMBU_COMPONENT_UUID_END = '-b206-40ff-9872-83e8017abed1';
+const BAMBU_BUILD_UUID = '2c7c17d8-22b5-4d84-8835-1976022ea369';
+const BAMBU_ITEM_UUID_END = '-b1ec-4553-aec9-835e5b724bb4';
+
+// Start of a Bambu Studio model file: the 3MF core and production namespaces
+const BAMBU_MODEL_START = '<model unit="millimeter" xml:lang="en-US" ' +
+    'xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" ' +
+    'xmlns:BambuStudio="http://schemas.bambulab.com/package/2021" ' +
+    'xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06" requiredextensions="p">';
+
+// The mesh check Bambu Studio writes on each part (the pads have no faults)
+const BAMBU_MESH_STAT = 'edges_fixed="0" degenerate_facets="0" facets_removed="0" ' +
+    'facets_reversed="0" backwards_edges="0"';
 
 // Fixed file that tells programs what kind of data each file in the 3MF holds
 const CONTENT_TYPES_XML = '<?xml version="1.0" encoding="UTF-8"?>\n' +
@@ -244,9 +281,17 @@ function read_model(text) {
         items.push({ object_id: attributes.objectid, matrix: read_matrix(attributes.transform) });
     }
 
+    // Keep the file's own notes (program, title, MakerWorld design), written as they are
+    const metadata = [];
+    const head = text.split(/<resources\b/)[0];
+    const metadata_pattern = /<metadata\s+name="([^"]*)"\s*>([^<]*)<\/metadata>/g;
+    while ((match = metadata_pattern.exec(head))) {
+        metadata.push({ name: match[1], value: match[2] });
+    }
+
     // Note which program made the file
-    const application = /<metadata\s+name="Application"\s*>([^<]*)<\/metadata>/.exec(text);
-    return { objects, items, application: application ? application[1] : '' };
+    const application = metadata.find((entry) => entry.name === 'Application');
+    return { objects, items, metadata, application: application ? application.value : '' };
 }
 
 // Get one model file out of the 3MF, reading it only the first time
@@ -308,7 +353,10 @@ async function load_3mf(buffer) {
     for (const item of root.items) {
         await collect_meshes(files, root_path, item.object_id, item.matrix, 0, meshes);
     }
-    return { meshes, application: root.application, source: '3mf' };
+
+    // Keep the zip and the main model's notes, so a Bambu Studio file can be built on top of them
+    const project = { zip: files.zip, root_path: root_path.replace(/^\/+/, ''), metadata: root.metadata };
+    return { meshes, application: root.application, source: '3mf', project };
 }
 
 
@@ -361,7 +409,7 @@ function load_stl(buffer) {
     const vertices = is_binary_stl(buffer) ? read_binary_stl(buffer) : read_ascii_stl(buffer);
     const triangles = new Uint32Array(vertices.length / 3);
     for (let i = 0; i < triangles.length; i++) triangles[i] = i;
-    return { meshes: [{ vertices, triangles, matrix: IDENTITY }], application: '', source: 'stl' };
+    return { meshes: [{ vertices, triangles, matrix: IDENTITY }], application: '', source: 'stl', project: null };
 }
 
 
@@ -693,6 +741,7 @@ async function read_ironing_file(buffer, file_name) {
     return {
         source: source.source,
         application: source.application,
+        project: source.project,
         pads,
         vertices: welded.vertices,
         triangles: welded.triangles,
@@ -725,7 +774,7 @@ async function read_ironing_file(buffer, file_name) {
 // Check the shared ironing settings
 function check_options(options) {
     const settings = {
-        slicer: options.slicer === 'bambu' ? 'bambu' : 'orca',
+        slicer: options.slicer === 'orca' ? 'orca' : 'bambu',
         spacing: Number(options.spacing),
         inset: Number(options.inset),
         angle: Number(options.angle || 0),
@@ -778,21 +827,18 @@ function write_model_xml(analysis, settings, grid_id, placement) {
     }
     objects.push(`<object id="${grid_id}" type="model"><components>${components}</components></object>`);
 
-    const application = settings.slicer === 'bambu' ? BAMBU_APPLICATION : ORCA_APPLICATION;
     return '<?xml version="1.0" encoding="UTF-8"?>\n' +
         '<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" ' +
         'xmlns:BambuStudio="http://schemas.bambulab.com/package/2021">\n' +
-        `<metadata name="Application">${application}</metadata>\n` +
+        `<metadata name="Application">${ORCA_APPLICATION}</metadata>\n` +
         '<metadata name="BambuStudio:3mfVersion">1</metadata>\n' +
         `<metadata name="Title">${escape_xml(analysis.title)}</metadata>\n` +
         '<resources>\n' + objects.join('\n') + '\n</resources>\n' +
         `<build>\n<item objectid="${grid_id}" transform="${placement}" printable="1"/>\n</build>\n</model>\n`;
 }
 
-// Write Metadata/model_settings.config: the shared ironing settings go on the
-// grid object, and each pad's flow and speed go on its own part
-function write_config_xml(analysis, settings, grid_id, placement) {
-    // Ironing settings shared by every pad
+// List the ironing settings shared by every pad
+function list_shared_settings(settings) {
     const shared = [
         ['ironing_type', 'topmost'],
         ['ironing_pattern', 'zig-zag'],
@@ -804,8 +850,14 @@ function write_config_xml(analysis, settings, grid_id, placement) {
     if (settings.slicer === 'orca') {
         shared.push(['ironing_angle', format_number(settings.angle)], ['ironing_angle_fixed', '1']);
     }
+    return shared;
+}
+
+// Write Metadata/model_settings.config for OrcaSlicer: the shared ironing
+// settings go on the grid object, and each pad's flow and speed go on its own part
+function write_config_xml(analysis, settings, grid_id, placement) {
     let shared_tags = '';
-    for (const [key, value] of shared) shared_tags += metadata_tag(key, value);
+    for (const [key, value] of list_shared_settings(settings)) shared_tags += metadata_tag(key, value);
 
     // One part per pad, with its own flow and speed
     let parts = '';
@@ -832,6 +884,196 @@ function write_config_xml(analysis, settings, grid_id, placement) {
         '</config>\n';
 }
 
+// ==================================================
+// Writing the Bambu Studio 3MF
+// ==================================================
+
+// Write a whole number in hexadecimal, padded with zeros to a set width
+function format_hex(value, width) {
+    return value.toString(16).padStart(width, '0');
+}
+
+// Find the path of the file that lists what a model file points to:
+// 3D/3dmodel.model -> 3D/_rels/3dmodel.model.rels
+function make_rels_path(path) {
+    return path.replace(/([^/]*)$/, '_rels/$1.rels');
+}
+
+// Find the Bambu Studio project in the dropped file. Stop if there isn't one,
+// because Bambu Studio would throw away every pad's ironing without it.
+function find_bambu_project(analysis) {
+    const project = analysis.project;
+    const has_project = Boolean(project) && /^BambuStudio-/.test(analysis.application) &&
+        project.zip.entries.has(BAMBU_PROJECT_SETTINGS);
+    if (!has_project) throw make_error('needs-bambu-project');
+    return project;
+}
+
+// Write 3D/Objects/object_1.model: every pad's mesh, with the IDs Bambu Studio gives parts
+function write_bambu_object_xml(analysis) {
+    const objects = [];
+    for (let i = 0; i < analysis.pads.length; i++) {
+        const uuid = '0001' + format_hex(i, 4) + BAMBU_PART_UUID_END;
+        objects.push(`<object id="${i + 1}" p:UUID="${uuid}" type="model">` +
+            write_pad_mesh(analysis, analysis.pads[i]) + '</object>');
+    }
+    return '<?xml version="1.0" encoding="UTF-8"?>\n' + BAMBU_MODEL_START + '\n' +
+        '<metadata name="BambuStudio:3mfVersion">1</metadata>\n' +
+        '<resources>\n' + objects.join('\n') + '\n</resources>\n<build/>\n</model>\n';
+}
+
+// Write the file that points the main model file at the pad meshes
+function write_bambu_object_rels() {
+    return '<?xml version="1.0" encoding="UTF-8"?>\n' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n' +
+        `<Relationship Target="/${BAMBU_OBJECT_FILE}" Id="rel-1" ` +
+        'Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>\n</Relationships>\n';
+}
+
+// Write the main model file: the MakerWorld file's own notes, then the grid
+// object made of the pads, placed where MakerWorld put it
+function write_bambu_model_xml(analysis, project, grid_id, placement) {
+    // Keep every note as MakerWorld wrote it (program, version, design), and
+    // give the project a title if it has none
+    let notes = '';
+    let has_version = false;
+    for (const entry of project.metadata) {
+        const value = entry.name === 'Title' && !entry.value ? escape_xml(analysis.title) : entry.value;
+        notes += `<metadata name="${entry.name}">${value}</metadata>\n`;
+        if (entry.name === 'BambuStudio:3mfVersion') has_version = true;
+    }
+    if (!has_version) notes += '<metadata name="BambuStudio:3mfVersion">1</metadata>\n';
+
+    // The grid object lists every pad as a component in the pad file
+    let components = '';
+    for (let i = 0; i < analysis.pads.length; i++) {
+        components += `<component p:path="/${BAMBU_OBJECT_FILE}" objectid="${i + 1}" ` +
+            `p:UUID="0001${format_hex(i, 4)}${BAMBU_COMPONENT_UUID_END}" transform="1 0 0 0 1 0 0 0 1 0 0 0"/>\n`;
+    }
+
+    return '<?xml version="1.0" encoding="UTF-8"?>\n' + BAMBU_MODEL_START + '\n' + notes +
+        '<resources>\n' +
+        `<object id="${grid_id}" p:UUID="00000001${BAMBU_OBJECT_UUID_END}" type="model">\n` +
+        '<components>\n' + components + '</components>\n</object>\n</resources>\n' +
+        `<build p:UUID="${BAMBU_BUILD_UUID}">\n` +
+        `<item objectid="${grid_id}" p:UUID="${format_hex(grid_id, 8)}${BAMBU_ITEM_UUID_END}" ` +
+        `transform="${placement}" printable="1"/>\n</build>\n</model>\n`;
+}
+
+// Write the plate: the MakerWorld file's own plate (its name and pictures)
+// with the grid on it, or a plain plate if the file has none
+async function write_bambu_plate(project, kept_files, grid_id, title) {
+    const bytes = await read_zip_entry(project.zip, 'Metadata/model_settings.config');
+    const old_config = bytes ? new TextDecoder().decode(bytes) : '';
+    const old_plate = (/<plate>([\s\S]*?)<\/plate>/.exec(old_config) || [])[1] || '';
+
+    // Read the plate's own settings, leaving out the objects that were on it
+    const entries = [];
+    const plate_settings = old_plate.replace(/<model_instance>[\s\S]*?<\/model_instance>/g, '');
+    const pattern = /<metadata\s+key="([^"]*)"\s+value="([^"]*)"\s*\/>/g;
+    let match;
+    while ((match = pattern.exec(plate_settings))) {
+        entries.push([match[1], match[2]]);
+    }
+    if (!entries.length) entries.push(['plater_id', '1'], ['plater_name', escape_xml(title)], ['locked', 'false']);
+
+    const lines = ['  <plate>'];
+    for (const [key, value] of entries) {
+        let text = value;
+
+        // Drop the name of any old G-code: it was sliced from the old pads
+        if (key === 'gcode_file') text = '';
+
+        // Keep a plate picture only if it was copied over
+        if (BAMBU_PLATE_PICTURES.includes(key) && !kept_files.has(value.replace(/^\/+/, ''))) text = '';
+        lines.push(`    <metadata key="${key}" value="${text}"/>`);
+    }
+
+    // Put the grid on the plate, keeping the plate's own number for it
+    const identify = /key="identify_id"\s+value="([^"]*)"/.exec(old_plate);
+    lines.push('    <model_instance>',
+        '      ' + metadata_tag('object_id', grid_id),
+        '      ' + metadata_tag('instance_id', '0'),
+        '      ' + metadata_tag('identify_id', identify ? identify[1] : 1000 + grid_id),
+        '    </model_instance>',
+        '  </plate>');
+    return lines.join('\n');
+}
+
+// Write Metadata/model_settings.config for Bambu Studio, laid out the way
+// Bambu Studio writes it: the shared ironing settings on the grid object,
+// each pad's flow and speed on its own part, then the plate
+function write_bambu_config_xml(analysis, settings, grid_id, plate) {
+    const lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<config>', `  <object id="${grid_id}">`,
+        '    ' + metadata_tag('name', analysis.title),
+        '    ' + metadata_tag('extruder', '1')];
+    for (const [key, value] of list_shared_settings(settings)) lines.push('    ' + metadata_tag(key, value));
+
+    // Bambu Studio notes how many triangles the object has
+    let face_count = 0;
+    for (const pad of analysis.pads) face_count += pad.triangle_ids.length;
+    lines.push(`    <metadata face_count="${face_count}"/>`);
+
+    // One part per pad, with its own flow and speed
+    for (let i = 0; i < analysis.pads.length; i++) {
+        const pad = analysis.pads[i];
+        lines.push(`    <part id="${i + 1}" subtype="normal_part">`,
+            '      ' + metadata_tag('name', pad.name),
+            '      ' + metadata_tag('matrix', NO_MOVE_MATRIX),
+            '      ' + metadata_tag('extruder', '1'),
+            '      ' + metadata_tag('ironing_flow', format_number(pad.flow) + '%'),
+            '      ' + metadata_tag('ironing_speed', format_number(pad.speed)),
+            `      <mesh_stat face_count="${pad.triangle_ids.length}" ${BAMBU_MESH_STAT}/>`,
+            '    </part>');
+    }
+    lines.push('  </object>', plate, '  <assemble>', '  </assemble>', '</config>', '');
+    return lines.join('\n');
+}
+
+// Write Metadata/slice_info.config: just the Bambu Studio version, since the plate isn't sliced yet
+function write_bambu_slice_info(application) {
+    const version = application.replace(/^BambuStudio-/, '');
+    return '<?xml version="1.0" encoding="UTF-8"?>\n<config>\n  <header>\n' +
+        '    <header_item key="X-BBL-Client-Type" value="slicer"/>\n' +
+        `    <header_item key="X-BBL-Client-Version" value="${escape_xml(version)}"/>\n` +
+        '  </header>\n</config>\n';
+}
+
+// Build the Bambu Studio 3MF: the MakerWorld file's project, with the grid
+// as one object and each pad as a part with its own flow and speed
+async function write_bambu_project(analysis, settings, grid_id, placement) {
+    const project = find_bambu_project(analysis);
+
+    // Copy the files that stay as they are
+    const files = [];
+    const kept_files = new Set();
+    for (const name of project.zip.entries.keys()) {
+        if (!BAMBU_KEPT_FILES.includes(name) && !/^Metadata\/[^/]+\.png$/i.test(name)) continue;
+        files.push({ name, data: await read_zip_entry(project.zip, name) });
+        kept_files.add(name);
+    }
+
+    // Add the standard index files if the MakerWorld file had none
+    if (!kept_files.has('[Content_Types].xml')) files.unshift({ name: '[Content_Types].xml', data: CONTENT_TYPES_XML });
+    if (!kept_files.has('_rels/.rels')) files.push({ name: '_rels/.rels', data: RELS_XML });
+
+    // Then the new model files and settings
+    const plate = await write_bambu_plate(project, kept_files, grid_id, analysis.title);
+    files.push(
+        { name: project.root_path, data: write_bambu_model_xml(analysis, project, grid_id, placement) },
+        { name: make_rels_path(project.root_path), data: write_bambu_object_rels() },
+        { name: BAMBU_OBJECT_FILE, data: write_bambu_object_xml(analysis) },
+        { name: 'Metadata/model_settings.config', data: write_bambu_config_xml(analysis, settings, grid_id, plate) },
+        { name: 'Metadata/slice_info.config', data: write_bambu_slice_info(analysis.application) },
+    );
+    return write_zip(files);
+}
+
+
+// ==================================================
+// Building the new 3MF
+// ==================================================
+
 // Build the new 3MF: one object for the grid, one part per pad
 async function build_ironing_3mf(analysis, options) {
     const settings = check_options(options || {});
@@ -843,6 +1085,10 @@ async function build_ironing_3mf(analysis, options) {
     // Where the grid sits on the plate
     const placement = `1 0 0 0 1 0 0 0 1 ${format_number(analysis.place[0])} ${format_number(analysis.place[1])} 0`;
 
+    // Bambu Studio keeps the settings only inside a Bambu Studio project
+    if (settings.slicer === 'bambu') return write_bambu_project(analysis, settings, grid_id, placement);
+
+    // OrcaSlicer reads the settings from a file that holds only the pads
     return write_zip([
         { name: '[Content_Types].xml', data: CONTENT_TYPES_XML },
         { name: '_rels/.rels', data: RELS_XML },

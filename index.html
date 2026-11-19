@@ -55,8 +55,8 @@ Loads:
         <h2>3. Save the new 3MF</h2>
         <label class="field">Slicer
             <select id="slicer">
+                <option value="bambu" selected>Bambu Studio</option>
                 <option value="orca">OrcaSlicer</option>
-                <option value="bambu">Bambu Studio (beta)</option>
             </select>
         </label>
 
@@ -103,7 +103,7 @@ Loads:
         <h2>4. Slice and print</h2>
         <ol>
             <li>Open the new 3MF and pick your printer, filament and process as usual.</li>
-            <li><strong>Turn off ironing overrides in your filament settings</strong> (Setting Overrides → Ironing).
+            <li id="orca_step"><strong>Turn off ironing overrides in your filament settings</strong> (Setting Overrides → Ironing).
                 If they're ticked, every pad irons the same.</li>
             <li>Slice and print, then pick the smoothest pad. Its flow and speed are engraved on it.</li>
         </ol>
