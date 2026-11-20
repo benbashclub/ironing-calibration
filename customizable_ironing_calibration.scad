@@ -33,7 +33,7 @@
 /* [Ironing Settings] */
 
 // Suggested macro tests. PLA, the defaults, is 5 Pad Rows and 5 Pad Columns, Flow start 10, Flow step 5, Speed start 15, Speed step 10. For PETG keep those but set Speed start 10 and Speed step 5. The Start pad gets your start values, and values go up as you move away from it. Middle puts the start values in the centre pad.
-Start_pad = "Bottom_left"; // [Bottom_left, Bottom_right, Top_left, Top_right, Middle]
+Start_pad = "Bottom_left"; // [Bottom_left:Bottom left, Bottom_right:Bottom right, Top_left:Top left, Top_right:Top right, Middle:Middle]
 
 // Rows of pads, bottom to top. Each row is one ironing flow.
 Pad_Rows = 5; // [1:1:10]
