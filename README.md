@@ -6,7 +6,7 @@ Sets the ironing flow and speed on every pad of your **Customizable Ironing Cali
 
 ## How to use it
 
-1. Make your test with the Customizable Ironing Calibration on MakerWorld and download the 3MF.
+1. Make your test with the [Customizable Ironing Calibration on MakerWorld](https://makerworld.com/en/models/3648899-customizable-ironing-calibration) and download the 3MF.
 2. Drop the 3MF on the converter, pick Bambu Studio or OrcaSlicer, and save the new 3MF.
 3. Open it in your slicer, pick your printer and filament, then slice and print.
 
